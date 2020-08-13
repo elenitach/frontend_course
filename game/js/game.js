@@ -2,12 +2,11 @@ var squareSizeOptions = [50, 100, 150, 200, 250, 300];
 var fieldSize = 800;
 var container = document.getElementsByClassName("container")[0];
 var initialStateForm = document.getElementsByClassName("card")[0]; 
+var tips = document.getElementsByClassName('tips')[0];
 var square1, square2;
-main();
-
-function main() {
-    initializeOptions();
-}
+var intervalId1, intervalId2;
+var gameOver = false;
+initializeOptions();
 
 function initializeOptions() {
     var squareSizeElements = document.getElementsByClassName("control-square-size");
@@ -18,8 +17,11 @@ function initializeOptions() {
             squareSizeElements[i].appendChild(optionElem);
         }
     }
-    document.getElementsByClassName("btn")[0].onclick = initializeGame;
-    document.getElementsByTagName("form")[0].onsubmit = preventPageReloading;
+    document.getElementsByTagName("form")[0].addEventListener('submit', function(event) {
+        preventPageReloading(event);
+        initializeGame();
+        startGame();
+    });
 }
 
 function preventPageReloading(e) {
@@ -30,14 +32,9 @@ function preventPageReloading(e) {
 function initializeGame() {
     square1 = initializeUser(1);
     square2 = initializeUser(2);
-    if (square1.size > square2.size) {
-        square1.isSmaller = false;
-        square2.isSmaller = true;
-    } else {
-        square1.isSmaller = true;
-        square2.isSmaller = false;
-    }
-    removeChildren(container);
+    square1.isSmaller = square1.size < square2.size;
+    square2.isSmaller = square2.size < square1.size;
+    container.removeChild(container.lastElementChild);
 
     var field = document.createElement('div');
     field.style.position = "relative";
@@ -47,16 +44,11 @@ function initializeGame() {
     field.appendChild(square1);
     field.appendChild(square2);
     container.appendChild(field);
-    document.onkeydown = move;
-}
-
-function removeChildren(element) {
-    while(element.firstChild) {
-        element.removeChild(element.firstChild);
-    }
+    tips.style.display = 'block';
 }
 
 function initializeUser(userNum) {
+    gameOver = false;
     var offest = 10;
     var square = document.createElement('img');
     var size = squareSizeOptions[document.getElementById("square-size-"+userNum).selectedIndex];
@@ -74,51 +66,87 @@ function initializeUser(userNum) {
     return square;
 }
 
-function move(event) {
-    var user1KeyCodes = [ 87, 65, 83, 68 ]
+function startGame() {
+    var user1KeyCodes = [ 87, 65, 83, 68 ];
     var user2KeyCodes = [ 38, 37, 40, 39 ];
-
-    var myKeyCodes;
-    var square;
-    if (user1KeyCodes.indexOf(event.keyCode) != -1) {
-        myKeyCodes = user1KeyCodes;
-        square = square1;
-    } else if (user2KeyCodes.indexOf(event.keyCode) != -1) {
-        myKeyCodes = user2KeyCodes;
-        square = square2;
-    } else {
-        return;
+    var pressedKeys = [];
+    document.onkeydown = function(e) {
+        if (pressedKeys.indexOf(e.keyCode) == -1) {
+            pressedKeys.push(e.keyCode);
+        }
     }
-
-    switch(event.keyCode) {
-        case myKeyCodes[0]:
-            square.top -= square.speed;
-            updateCoords(square);
-            break;
-        case myKeyCodes[1]:
-            square.left -= square.speed;
-            updateCoords(square);
-            break;
-        case myKeyCodes[2]:
-            square.top += square.speed;
-            updateCoords(square);
-            break;
-        case myKeyCodes[3]:
-            square.left += square.speed;
-            updateCoords(square);
-            break;
+    document.onkeyup = function(e) {
+        pressedKeys.splice(pressedKeys.indexOf(e.keyCode));
     }
+    intervalId1 = setInterval(function() {
+        for (var i=0; i<pressedKeys.length; i++) {
+            handlePressedKey(square1, user1KeyCodes, pressedKeys[i]);
+            updateCoords(square1);
+            checkCoords(square1);            
+        }
+    }, getInterval(square1));
+
+    intervalId2 = setInterval(function() {
+        for (var i=0; i<pressedKeys.length; i++) {
+            handlePressedKey(square2, user2KeyCodes, pressedKeys[i]);
+            updateCoords(square2);
+            checkCoords(square2);            
+        }
+    }, getInterval(square2));
+}
+
+function getInterval(square) {
+    return 10 / (square.speed);
+}
+
+function handlePressedKey(square, keyCodes, key) {
+    switch(key) {
+        case keyCodes[0]:
+            square.top--;
+            break;
+        case keyCodes[1]:
+            square.left--;
+            if (square.userNum == 1) {
+                square.style.transform = 'scale(-1,1)';
+            } else {
+                square.style.transform = 'none';
+            }
+            break;
+        case keyCodes[2]:
+            square.top++;
+            break;
+        case  keyCodes[3]:
+            square.left++;
+            if (square.userNum == 2) {
+                square.style.transform = 'scale(-1,1)';
+            } else {
+                square.style.transform = 'none';
+            }
+            break;       
+    }
+}
+
+function checkCoords(square) {
+    if (gameOver) return;
+    var message;
     if (!cooridinatesInsideField(square.size, square.size, square.top, square.left)) {
-        alert('Игрок ' + square.userNum + ' проиграл!');
-        removeChildren(container);
-        container.appendChild(initialStateForm);
+        message = 'Игрок ' + square.userNum + ' проиграл!';
     } else if (usersFaced(square1, square2)) {
-        var winner = square1.isSmaller ? 2 : 1;
-        alert('Игрок ' + winner + ' победил!')
-        removeChildren(container);
-        container.appendChild(initialStateForm);
-    }        
-    
+        if (!square1.isSmaller && !square2.isSmaller) {
+            message = "Ничья!";
+        } else {
+            var winner = square1.isSmaller ? 2 : 1;
+            message = 'Игрок ' + winner + ' победил!';
+        }
+    } else return;
+
+    alert(message);
+    clearInterval(intervalId1);
+    clearInterval(intervalId2);
+    gameOver = true;
+    container.removeChild(container.lastElementChild);
+    tips.style.display = 'none';
+    container.appendChild(initialStateForm);
 }
 
 function cooridinatesInsideField(width, height, top, left) {
@@ -136,10 +164,10 @@ function usersFaced(square1, square2) {
 }
 
 function pointInSquare(top, left, square) {
-    return top >= square.top
-        && top <= square.top + square.size
-        && left >= square.left
-        && left <= square.left + square.size
+    return top > square.top
+        && top < square.top + square.size
+        && left > square.left
+        && left < square.left + square.size
 }
 
 function updateCoords(square) {
